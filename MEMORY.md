@@ -66,6 +66,12 @@ scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shel
   `sentinel_silenced_all_until`. Si falla el envío no marca `last_notified_at` → reintenta el próximo tick.
   `>SENTINEL_STORM_THRESHOLD` eventos en un tick → 1 mensaje consolidado (alertas + recuperaciones).
   RECUPERADO solo si la caída había sido notificada.
+- **Sentinel — filtro de push WhatsApp:** todo componente se evalúa y persiste en `sentinel_alert_state`
+  (cpanel-roster / "¿qué está caído?"), pero solo `SENTINEL_NOTIFY_COMPONENTS` (default `proxmox`) genera
+  mensajes. Gracia desde `first_seen_at` antes del primer aviso: `SENTINEL_VM_GRACE_MS` (2 min, nodos) /
+  `SENTINEL_IRD_GRACE_MS` (10 min, ird); recuperado antes de notificar → `ok` silencioso. Un cambio de severidad
+  dentro de la gracia no reinicia ni adelanta el reloj. `SENTINEL_NOTIFY_REMINDERS=false` (default): sin
+  "🔁 Sigue…"; solo `new`, `changed` (degraded↔down) y `✅ RECUPERADO`. Defaults espejados en `SentinelOptions`.
 - **Tank:** rechaza cualquier intento de shell (metacaracteres, `rm`, `sudo`, `ejecutá`, …) con
   límites de palabra Unicode-aware (`\b` de JS rompe con acentos: "catálogo"). Restart =
   `systemctl restart <unit>` (`sudo -n` si `SSH_USER≠root`) + post-check `systemctl is-active`.
@@ -102,7 +108,8 @@ scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shel
   `/etc/nginx/sites-available/roster.xisrv.xyz`, `certbot --nginx -d roster.xisrv.xyz`, `nginx -t && reload`.
 
 ## 5. Verificación (2026-11-24)
-- `npx tsc --noEmit` → 0 errores. `npm test` → 190 tests, 190 pass, 0 fail (incluye auth/API web/store + No-Astra web).
+- `npx tsc --noEmit` → 0 errores. `npm test` → 200 tests, 200 pass, 0 fail (incluye auth/API web/store + No-Astra web
+  + filtro de push/gracias de Sentinel).
 - `npm run build` → OK. `cd web && npx tsc --noEmit && npm run build` → OK (~176 kB JS / 56 kB gzip).
 - `npm run test:sql` → SKIP (sin `TEST_PG_URL` en el entorno de desarrollo).
 - **No verificado aún:** `docker build`, `test:sql` contra PostgreSQL real y prueba visual del SPA contra API real.

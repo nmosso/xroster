@@ -18,6 +18,13 @@ export interface SentinelOptions {
     pollMs: number;
     cooldownMs: number;
     stormThreshold: number;
+    /** Componentes con push a WhatsApp (default `['proxmox']`); el resto solo persiste. */
+    notifyComponents?: readonly Component[];
+    /** Recordatorios por cooldown de incidentes ya notificados (default `false`). */
+    notifyReminders?: boolean;
+    /** Gracia desde `first_seen_at` antes del primer aviso: VM (default 2 min) e IRD (default 10 min). */
+    vmGraceMs?: number;
+    irdGraceMs?: number;
 }
 
 type EventKind = 'new' | 'changed' | 'reminder' | 'recovered';
@@ -44,10 +51,18 @@ export class Sentinel implements SpecialistAgent, SentinelControl {
     private readonly logger: Logger;
     private timer: NodeJS.Timeout | null = null;
     private running: Promise<TickResult> | null = null;
+    private readonly notifyComponents: ReadonlySet<string>;
+    private readonly notifyReminders: boolean;
+    private readonly vmGraceMs: number;
+    private readonly irdGraceMs: number;
 
     constructor(private readonly o: SentinelOptions) {
         this.clock = o.clock ?? (() => new Date());
         this.logger = o.logger ?? silentLogger;
+        this.notifyComponents = new Set(o.notifyComponents ?? ['proxmox']);
+        this.notifyReminders = o.notifyReminders ?? false;
+        this.vmGraceMs = o.vmGraceMs ?? 120_000;
+        this.irdGraceMs = o.irdGraceMs ?? 600_000;
     }
 
     // ---------------- Ciclo de polling ----------------
@@ -118,24 +133,23 @@ export class Sentinel implements SpecialistAgent, SentinelControl {
             return { kind: 'recovered', row, downSinceMs: prev.first_seen_at.getTime() };
         }
 
-        let kind: EventKind | null;
-        let row: AlertStateRow;
-        if (!prev || prev.state === 'ok') {
-            kind = 'new';
-            row = {
+        const row: AlertStateRow = !prev || prev.state === 'ok'
+            ? {
                 alert_key: key, tenant_position: position, tenant_name: await this.tenantName(position), component, state,
                 first_seen_at: now, last_notified_at: null, silenced_until: prev?.silenced_until ?? null, last_detail: detail, metrics
-            };
-        } else if (prev.state !== state) {
-            kind = 'changed';
-            row = { ...prev, state, last_detail: detail, metrics };
-        } else {
-            const due = prev.last_notified_at === null || now.getTime() - prev.last_notified_at.getTime() >= this.o.cooldownMs;
-            kind = due ? (prev.last_notified_at === null ? 'new' : 'reminder') : null;
-            row = { ...prev, last_detail: detail, metrics };
-        }
+            }
+            : { ...prev, state, last_detail: detail, metrics };
+        // Siempre persiste (cpanel-roster / consulta on request); el push a WhatsApp se filtra después.
         await this.o.store.upsertAlertState(row);
-        return kind && !silenced ? { kind, row } : null;
+        if (silenced || !this.notifyComponents.has(component)) return null;
+
+        if (row.last_notified_at === null) {
+            const graceMs = component === 'ird' ? this.irdGraceMs : this.vmGraceMs;
+            return now.getTime() - row.first_seen_at.getTime() >= graceMs ? { kind: 'new', row } : null;
+        }
+        if (prev && prev.state !== state) return { kind: 'changed', row };
+        if (this.notifyReminders && now.getTime() - row.last_notified_at.getTime() >= this.o.cooldownMs) return { kind: 'reminder', row };
+        return null;
     }
 
     private async tenantName(position: string): Promise<string | null> {

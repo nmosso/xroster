@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryRosterStore } from '../src/db/memoryStore';
 import { FLAG_PAUSED, FLAG_SILENCED_ALL_UNTIL } from '../src/db/store';
-import { Sentinel } from '../src/agents/sentinel';
+import { Sentinel, type SentinelOptions } from '../src/agents/sentinel';
+import type { Component } from '../src/core/health';
 import type { MonitoringSource, TenantSnapshot } from '../src/tools/monitoringSource';
 import { fixedClock } from './helpers';
 
@@ -36,7 +37,12 @@ function controllableSource(nowSec: () => number) {
     };
 }
 
-function setup() {
+/** Modo previo al filtro de push: todos los componentes, reminders y sin gracia (cubre la máquina de estados base). */
+const LEGACY: Partial<SentinelOptions> = {
+    notifyComponents: ['proxmox', 'xmanager', 'multicast', 'streamer', 'ird'], notifyReminders: true, vmGraceMs: 0, irdGraceMs: 0
+};
+
+function setup(over: Partial<SentinelOptions> = LEGACY) {
     const store = new MemoryRosterStore();
     const c = fixedClock();
     const src = controllableSource(() => Math.floor(c.nowMs() / 1000));
@@ -45,10 +51,168 @@ function setup() {
         store, source: src.source, clock: c.clock,
         notify: async (t) => { sent.push(t); },
         resolveName: async (pos) => `Tenant${pos}`,
-        cooldownMs: 30 * MIN, stormThreshold: 3, pollMs: 60_000
+        cooldownMs: 30 * MIN, stormThreshold: 3, pollMs: 60_000,
+        ...over
     });
     return { store, src, sent, sentinel, advance: c.advance };
 }
+
+/** Fuente por componente: cualquier combinación de proxmox/xmanager/multicast/streamer/ird caída en el tenant 43. */
+function componentSource(nowSec: () => number) {
+    const down = new Set<Component>();
+    const source: MonitoringSource = {
+        async listSnapshots() {
+            const hash: Record<string, string> = {};
+            for (const n of ['proxmox', 'xmanager', 'multicast', 'streamer'] as const) {
+                hash[`${n}_ts`] = String(nowSec() - (down.has(n) ? 900 : 10));
+            }
+            hash['ird_summary'] = JSON.stringify({ signal_status: down.has('ird') ? 'red' : 'green', bitrate_status: 'green' });
+            return [{ position: '43', hash }];
+        },
+        async getSnapshot() { return null; }
+    };
+    return { source, down: (...c: Component[]) => c.forEach((x) => down.add(x)), up: (...c: Component[]) => c.forEach((x) => down.delete(x)) };
+}
+
+/** Sentinel con los defaults de producción (sin overrides de notificación). */
+function prodSetup(over: Partial<SentinelOptions> = {}) {
+    const store = new MemoryRosterStore();
+    const c = fixedClock();
+    const src = componentSource(() => Math.floor(c.nowMs() / 1000));
+    const sent: string[] = [];
+    const sentinel = new Sentinel({
+        store, source: src.source, clock: c.clock, notify: async (t) => { sent.push(t); },
+        cooldownMs: 30 * MIN, stormThreshold: 3, pollMs: 60_000, ...over
+    });
+    /** Avanza `ms` en pasos de 1 min con un tick por paso (polling real). */
+    const run = async (ms: number) => {
+        for (let t = 0; t < ms; t += MIN) { c.advance(MIN); await sentinel.tick(); }
+    };
+    return { store, src, sent, sentinel, advance: c.advance, run };
+}
+
+test('default notifyComponents=[proxmox]: xmanager/multicast/streamer/ird persisten en DB pero 0 mensajes WhatsApp', async () => {
+    const t = prodSetup();
+    await t.sentinel.tick();
+    t.src.down('xmanager', 'multicast', 'streamer', 'ird');
+    await t.sentinel.tick();
+    await t.run(60 * MIN);
+    for (const comp of ['xmanager', 'multicast', 'streamer', 'ird']) {
+        const row = await t.store.getAlertState(`43:${comp}`);
+        assert.equal(row?.state, 'down', comp);
+        assert.equal(row?.last_notified_at, null, comp);
+    }
+    assert.equal(await t.sentinel.activeAlertCount(), 4, 'consulta on request los ve');
+    assert.match(await t.sentinel.whatIsDown(), /xManager/);
+    t.src.up('xmanager', 'multicast', 'streamer', 'ird');
+    await t.sentinel.tick();
+    assert.equal((await t.store.getAlertState('43:ird'))?.state, 'ok');
+    assert.equal(t.sent.length, 0);
+});
+
+test('gracia proxmox: micro-corte < 2 min se registra y se recupera en silencio (0 mensajes)', async () => {
+    const t = prodSetup();
+    await t.sentinel.tick();
+    t.src.down('proxmox');
+    await t.sentinel.tick();
+    const row = await t.store.getAlertState('43:proxmox');
+    assert.equal(row?.state, 'down', 'persiste de inmediato');
+    assert.equal(row?.last_notified_at, null);
+    t.advance(MIN + 59_000);
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 0, '1:59 sigue dentro de la gracia');
+    t.src.up('proxmox');
+    await t.sentinel.tick();
+    assert.equal((await t.store.getAlertState('43:proxmox'))?.state, 'ok');
+    assert.equal(t.sent.length, 0);
+});
+
+test('gracia proxmox: caída >= 2 min notifica 1 vez, sin reminders tras 30+ min, y RECUPERADO al volver', async () => {
+    const t = prodSetup();
+    await t.sentinel.tick();
+    t.src.down('proxmox');
+    await t.sentinel.tick();
+    t.advance(2 * MIN);
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 1);
+    assert.match(t.sent[0]!, /CAÍDO · 43 · Proxmox/);
+    assert.ok((await t.store.getAlertState('43:proxmox'))?.last_notified_at);
+
+    await t.run(45 * MIN);
+    assert.equal(t.sent.length, 1, 'notifyReminders=false: sin recordatorios');
+
+    t.src.up('proxmox');
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 2);
+    assert.match(t.sent[1]!, /✅ RECUPERADO · 43 · Proxmox/);
+});
+
+test('gracia IRD (habilitado): < 10 min silencioso; >= 10 min notifica 1 vez, sin reminders, RECUPERADO', async () => {
+    const micro = prodSetup({ notifyComponents: ['proxmox', 'ird'] });
+    await micro.sentinel.tick();
+    micro.src.down('ird');
+    await micro.sentinel.tick();
+    await micro.run(9 * MIN);
+    micro.src.up('ird');
+    await micro.sentinel.tick();
+    assert.equal(micro.sent.length, 0, 'micro-corte IRD < 10 min');
+
+    const t = prodSetup({ notifyComponents: ['proxmox', 'ird'] });
+    await t.sentinel.tick();
+    t.src.down('ird');
+    await t.sentinel.tick();
+    await t.run(9 * MIN);
+    assert.equal(t.sent.length, 0, 'la gracia de 2 min de VM no aplica a IRD');
+    await t.run(MIN);
+    assert.equal(t.sent.length, 1);
+    assert.match(t.sent[0]!, /IRD/);
+    await t.run(40 * MIN);
+    assert.equal(t.sent.length, 1);
+    t.src.up('ird');
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 2);
+    assert.match(t.sent[1]!, /✅ RECUPERADO · 43 · IRD/);
+});
+
+test('gracia: cambio de severidad antes de notificar no adelanta el aviso; tras notificar emite changed', async () => {
+    const t = prodSetup({ notifyComponents: ['multicast'] });
+    const degraded = (on: boolean) => {
+        const base = t.src.source.listSnapshots.bind(t.src.source);
+        t.src.source.listSnapshots = async () => {
+            const snaps = await base();
+            if (on) snaps[0]!.hash['multicast_errors'] = JSON.stringify({ down_channels: 3, total_channels: 10 });
+            return snaps;
+        };
+    };
+    await t.sentinel.tick();
+    degraded(true);
+    await t.sentinel.tick();
+    t.advance(MIN);
+    t.src.down('multicast');
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 0, 'degraded -> down dentro de la gracia: sin aviso');
+    t.advance(MIN);
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 1, 'gracia contada desde first_seen_at');
+    assert.match(t.sent[0]!, /CAÍDO/);
+    t.src.up('multicast');
+    t.advance(MIN);
+    await t.sentinel.tick();
+    assert.equal(t.sent.length, 2);
+    assert.match(t.sent[1]!, /DEGRADADO/, 'down -> degraded tras notificar: changed');
+});
+
+test('notifyReminders=true conserva el recordatorio por cooldown', async () => {
+    const t = prodSetup({ notifyReminders: true });
+    await t.sentinel.tick();
+    t.src.down('proxmox');
+    await t.sentinel.tick();
+    await t.run(2 * MIN);
+    assert.equal(t.sent.length, 1);
+    await t.run(30 * MIN);
+    assert.equal(t.sent.length, 2);
+    assert.match(t.sent[1]!, /Sigue/);
+});
 
 test('transición caída -> alerta -> cooldown -> recordatorio -> recuperación', async () => {
     const t = setup();
@@ -190,7 +354,7 @@ test('fallo al notificar: no marca last_notified_at para reintentar en el próxi
     let fail = true;
     const sent: string[] = [];
     const s = new Sentinel({
-        store, source: src.source, clock: c.clock, cooldownMs: 30 * MIN, stormThreshold: 3, pollMs: 60_000,
+        store, source: src.source, clock: c.clock, cooldownMs: 30 * MIN, stormThreshold: 3, pollMs: 60_000, ...LEGACY,
         notify: async (m) => { if (fail) throw new Error('evolution caído'); sent.push(m); }
     });
     src.add('43');

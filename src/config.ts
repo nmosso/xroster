@@ -1,4 +1,5 @@
 import { parseOwnerPhones } from './core/phone';
+import { COMPONENT_LABEL, type Component } from './core/health';
 
 export type ClaudeProviderMode = 'cli' | 'api';
 
@@ -29,6 +30,14 @@ export interface AppConfig {
     sentinelPollMs: number;
     sentinelAlertCooldownMs: number;
     sentinelStormThreshold: number;
+    /** Componentes que generan push a WhatsApp; el resto solo persiste en `sentinel_alert_state`. */
+    sentinelNotifyComponents: Component[];
+    /** Recordatorios periódicos por cooldown de incidentes ya notificados. */
+    sentinelNotifyReminders: boolean;
+    /** Gracia antes del primer aviso: proxmox/xmanager/multicast/streamer. */
+    sentinelVmGraceMs: number;
+    /** Gracia antes del primer aviso: ird. */
+    sentinelIrdGraceMs: number;
     tankServiceUnits: string | null;
     /** cpanel-roster (REQ-2026-013). Sin password o secret → `/api/*` responde 503 (fail-closed). */
     web: WebConfig;
@@ -76,6 +85,26 @@ export function loadConfig(env: Env): AppConfig {
         return Number(raw);
     };
 
+    const bool = (k: string, def: boolean): boolean => {
+        const raw = str(k).toLowerCase();
+        if (!raw) return def;
+        if (raw !== 'true' && raw !== 'false') {
+            problems.push(`${k} debe ser "true" o "false" (valor: "${raw}")`);
+            return def;
+        }
+        return raw === 'true';
+    };
+    const components = (k: string, def: Component[]): Component[] => {
+        const items = str(k).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+        if (items.length === 0) return def;
+        const invalid = items.filter((c) => !Object.hasOwn(COMPONENT_LABEL, c));
+        if (invalid.length > 0) {
+            problems.push(`${k} solo admite ${Object.keys(COMPONENT_LABEL).join(', ')} (inválidos: "${invalid.join(', ')}")`);
+            return def;
+        }
+        return [...new Set(items as Component[])];
+    };
+
     const webhookSecret = req('XROSTER_WEBHOOK_SECRET');
     if (webhookSecret && webhookSecret.length < 16) problems.push('XROSTER_WEBHOOK_SECRET debe tener al menos 16 caracteres');
 
@@ -121,6 +150,10 @@ export function loadConfig(env: Env): AppConfig {
         sentinelPollMs: int('SENTINEL_POLL_MS', 60_000, 1000),
         sentinelAlertCooldownMs: int('SENTINEL_ALERT_COOLDOWN_MS', 1_800_000, 0),
         sentinelStormThreshold: int('SENTINEL_STORM_THRESHOLD', 3, 1),
+        sentinelNotifyComponents: components('SENTINEL_NOTIFY_COMPONENTS', ['proxmox']),
+        sentinelNotifyReminders: bool('SENTINEL_NOTIFY_REMINDERS', false),
+        sentinelVmGraceMs: int('SENTINEL_VM_GRACE_MS', 120_000, 0),
+        sentinelIrdGraceMs: int('SENTINEL_IRD_GRACE_MS', 600_000, 0),
         tankServiceUnits: opt('TANK_SERVICE_UNITS'),
         web: {
             user: str('ROSTER_WEB_USER') || 'admin',

@@ -93,7 +93,9 @@ export function createApp(cfg: AppConfig, deps: AppDeps = {}): App {
     const sentinel = new Sentinel({
         store, source: monitoring, logger, resolveName,
         notify: (text) => messenger.sendText(cfg.commandGroupId, text),
-        pollMs: cfg.sentinelPollMs, cooldownMs: cfg.sentinelAlertCooldownMs, stormThreshold: cfg.sentinelStormThreshold
+        pollMs: cfg.sentinelPollMs, cooldownMs: cfg.sentinelAlertCooldownMs, stormThreshold: cfg.sentinelStormThreshold,
+        notifyComponents: cfg.sentinelNotifyComponents, notifyReminders: cfg.sentinelNotifyReminders,
+        vmGraceMs: cfg.sentinelVmGraceMs, irdGraceMs: cfg.sentinelIrdGraceMs
     });
     const tank = new Tank({
         tenants, monitoring, approvals, router, fetchImpl, logger,

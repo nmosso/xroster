@@ -23,6 +23,37 @@ test('loadConfig: env mínimo válido -> defaults de §5.3', () => {
     assert.equal(c.geminiApiKey, null);
 });
 
+test('loadConfig Sentinel push WhatsApp: defaults (solo proxmox, sin reminders, gracia 2 min VM / 10 min IRD)', () => {
+    const c = loadConfig(VALID_ENV);
+    assert.deepEqual(c.sentinelNotifyComponents, ['proxmox']);
+    assert.equal(c.sentinelNotifyReminders, false);
+    assert.equal(c.sentinelVmGraceMs, 120_000);
+    assert.equal(c.sentinelIrdGraceMs, 600_000);
+});
+
+test('loadConfig Sentinel push WhatsApp: overrides explícitos', () => {
+    const c = loadConfig({
+        ...VALID_ENV,
+        SENTINEL_NOTIFY_COMPONENTS: ' Proxmox, ird ,proxmox ',
+        SENTINEL_NOTIFY_REMINDERS: 'true',
+        SENTINEL_VM_GRACE_MS: '0',
+        SENTINEL_IRD_GRACE_MS: '300000'
+    });
+    assert.deepEqual(c.sentinelNotifyComponents, ['proxmox', 'ird']);
+    assert.equal(c.sentinelNotifyReminders, true);
+    assert.equal(c.sentinelVmGraceMs, 0);
+    assert.equal(c.sentinelIrdGraceMs, 300_000);
+    assert.equal(loadConfig({ ...VALID_ENV, SENTINEL_NOTIFY_REMINDERS: 'false' }).sentinelNotifyReminders, false);
+});
+
+test('loadConfig Sentinel push WhatsApp: valores inválidos se reportan', () => {
+    const bad = (over: Record<string, string>) => () => loadConfig({ ...VALID_ENV, ...over });
+    assert.throws(bad({ SENTINEL_NOTIFY_COMPONENTS: 'proxmox,router' }), /SENTINEL_NOTIFY_COMPONENTS/);
+    assert.throws(bad({ SENTINEL_NOTIFY_REMINDERS: 'si' }), /SENTINEL_NOTIFY_REMINDERS/);
+    assert.throws(bad({ SENTINEL_VM_GRACE_MS: '-1' }), /SENTINEL_VM_GRACE_MS/);
+    assert.throws(bad({ SENTINEL_IRD_GRACE_MS: 'diez' }), /SENTINEL_IRD_GRACE_MS/);
+});
+
 test('loadConfig: reporta TODAS las variables obligatorias faltantes', () => {
     assert.throws(() => loadConfig({}), (e: unknown) => {
         assert.ok(e instanceof ConfigError);
@@ -70,7 +101,8 @@ test('.env.example documenta todas las variables de §5.3', () => {
         'PORT', 'XROSTER_WEBHOOK_SECRET', 'WHATSAPP_COMMAND_GROUP_ID', 'OWNER_WHATSAPP_PHONES', 'EVOLUTION_API_URL', 'EVOLUTION_API_KEY',
         'EVOLUTION_INSTANCE_NAME', 'PG_XROSTER_URL', 'PG_XSERVER_RO_URL', 'REDIS_URL', 'SSH_KEY_PATH', 'SSH_USER', 'SSH_TIMEOUT_MS',
         'XPLANNING_REPO_URL', 'XPLANNING_BRANCH', 'XPLANNING_GIT_TOKEN', 'XPLANNING_LOCAL_DIR', 'GEMINI_API_KEY', 'GEMINI_MODEL_FAST',
-        'CLAUDE_PROVIDER', 'ANTHROPIC_API_KEY', 'CLAUDE_MODEL', 'SENTINEL_POLL_MS', 'SENTINEL_ALERT_COOLDOWN_MS', 'SENTINEL_STORM_THRESHOLD'
+        'CLAUDE_PROVIDER', 'ANTHROPIC_API_KEY', 'CLAUDE_MODEL', 'SENTINEL_POLL_MS', 'SENTINEL_ALERT_COOLDOWN_MS', 'SENTINEL_STORM_THRESHOLD',
+        'SENTINEL_NOTIFY_COMPONENTS', 'SENTINEL_NOTIFY_REMINDERS', 'SENTINEL_VM_GRACE_MS', 'SENTINEL_IRD_GRACE_MS'
     ]) {
         assert.match(example, new RegExp(`^${k}=`, 'm'), k);
     }

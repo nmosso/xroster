@@ -150,6 +150,44 @@ test('createApp: sin ROSTER_WEB_PASSWORD la API web queda cerrada (503) y /healt
     }
 });
 
+test('createApp: Sentinel recibe SENTINEL_NOTIFY_COMPONENTS y gracias desde la config', async () => {
+    const stale = String(Math.floor(Date.now() / 1000) - 900);
+    const build = (env: Record<string, string>) => {
+        const evolution: string[] = [];
+        const store = new MemoryRosterStore();
+        const app = createApp(loadConfig({ ...VALID_ENV, PORT: '0', ...env }), {
+            store,
+            redis: {
+                async scan() { return ['0', ['monitoring:tenant:43']]; },
+                async hgetall() { return { proxmox_ts: stale, xmanager_ts: stale }; },
+                async quit() { return 'OK'; }
+            },
+            tenantsDb: { async query() { return { rows: [] }; }, async end() {} },
+            runner: scriptedRunner(() => ({ code: 0 })),
+            fetchImpl: (async (_url: string | URL, init?: RequestInit) => {
+                evolution.push(String((JSON.parse(String(init?.body ?? '{}')) as { text?: string }).text));
+                return new Response('{}', { status: 200 });
+            }) as typeof fetch,
+            webStaticDir: null
+        });
+        return { app, store, evolution };
+    };
+
+    const graced = build({});
+    await graced.app.sentinel.tick();
+    assert.equal(graced.evolution.length, 0, 'default: gracia de 2 min antes de avisar');
+    assert.equal((await graced.store.getAlertState('43:proxmox'))?.state, 'down');
+    await graced.app.stop();
+
+    const noGrace = build({ SENTINEL_VM_GRACE_MS: '0' });
+    await noGrace.app.sentinel.tick();
+    assert.equal(noGrace.evolution.length, 1);
+    assert.match(noGrace.evolution[0]!, /Proxmox/);
+    assert.doesNotMatch(noGrace.evolution[0]!, /xManager/, 'xmanager fuera de SENTINEL_NOTIFY_COMPONENTS');
+    assert.equal((await noGrace.store.getAlertState('43:xmanager'))?.state, 'down');
+    await noGrace.app.stop();
+});
+
 test('createApp: stop() es idempotente', async () => {
     const h = harness();
     await h.app.start();
