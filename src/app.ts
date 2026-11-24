@@ -20,6 +20,10 @@ import { Sentinel } from './agents/sentinel';
 import { Tank, parseServiceUnits } from './agents/tank';
 import { Shikamaru } from './agents/shikamaru';
 import { createServer } from './server';
+import { createApiRouter } from './web/apiRouter';
+import { WebAuth } from './web/auth';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 /** Dependencias externas inyectables (tests L2); por defecto se crean desde la configuración. */
 export interface AppDeps {
@@ -30,7 +34,12 @@ export interface AppDeps {
     fetchImpl?: typeof fetch;
     geminiClient?: GeminiClientLike;
     logger?: Logger;
+    /** Directorio del SPA compilado; por defecto `dist/web` si contiene index.html; null lo desactiva. */
+    webStaticDir?: string | null;
 }
+
+/** `dist/web` tanto desde dist/app.js (build) como desde src/app.ts (tsx). */
+const DEFAULT_WEB_DIR = resolve(__dirname, '..', 'dist', 'web');
 
 export interface App {
     readonly jarvis: Jarvis;
@@ -102,7 +111,19 @@ export function createApp(cfg: AppConfig, deps: AppDeps = {}): App {
         commandGroupId: cfg.commandGroupId, ownerPhones: cfg.ownerPhones, store, messenger, approvals, router,
         agents: { sentinel, tank, shikamaru }, sentinelControl: sentinel, logger
     });
-    const server = createServer({ secret: cfg.webhookSecret, onMessage: (p) => jarvis.handle(p), logger });
+    const api = createApiRouter({
+        auth: new WebAuth(cfg.web), store, approvals, sentinel, logger,
+        notify: (text) => jarvis.notify(text),
+        probes: {
+            redis: async () => { await redis.scan('0', 'MATCH', 'monitoring:tenant:*', 'COUNT', 1); return true; },
+            evolution: () => messenger.ping()
+        }
+    });
+    if (!cfg.web.password || !cfg.web.sessionSecret) {
+        logger.warn('cpanel-roster deshabilitado: falta ROSTER_WEB_PASSWORD o ROSTER_SESSION_SECRET (/api/* responde 503)');
+    }
+    const staticDir = deps.webStaticDir !== undefined ? deps.webStaticDir : (existsSync(join(DEFAULT_WEB_DIR, 'index.html')) ? DEFAULT_WEB_DIR : null);
+    const server = createServer({ secret: cfg.webhookSecret, onMessage: (p) => jarvis.handle(p), api, staticDir, logger });
 
     let stopping: Promise<void> | null = null;
 
@@ -122,7 +143,11 @@ export function createApp(cfg: AppConfig, deps: AppDeps = {}): App {
         stop() {
             stopping ??= (async () => {
                 await sentinel.stop();
-                if (server.listening) await new Promise<void>((r) => server.close(() => r()));
+                if (server.listening) {
+                    const closed = new Promise<void>((r) => server.close(() => r()));
+                    server.closeIdleConnections(); // keep-alive ociosos (navegador del cpanel) no deben demorar el shutdown
+                    await closed;
+                }
                 const close = async (label: string, fn: () => Promise<unknown>): Promise<void> => {
                     try { await fn(); } catch (err) { logger.warn(`shutdown: ${label}`, { error: errorMessage(err) }); }
                 };

@@ -1,7 +1,7 @@
 // L2: ensamblado completo (createApp) con dobles de PG/Redis/Evolution/SSH — webhook HTTP real de punta a punta.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app';
@@ -80,6 +80,74 @@ test('createApp: initSchema, /health, webhook STATUS -> respuesta al War Room v�
         rmSync(h.dir, { recursive: true, force: true });
     }
     assert.deepEqual(h.closed(), { redisClosed: true, pgClosed: true });
+});
+
+test('createApp: cpanel-roster — login, overview con sondas reales, confirmación L1 notificada y SPA servido', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xroster-app-web-'));
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><title>cpanel-roster</title>');
+    const cfg = loadConfig({
+        ...VALID_ENV, PORT: '0', XPLANNING_LOCAL_DIR: join(dir, 'xPlanning'), SENTINEL_POLL_MS: '3600000',
+        ROSTER_WEB_PASSWORD: 'pw-123456', ROSTER_SESSION_SECRET: 'z'.repeat(64)
+    });
+    const store = new MemoryRosterStore();
+    const evolution: string[] = [];
+    const fetchImpl = (async (url: string | URL) => {
+        evolution.push(String(url));
+        return new Response('{"instance":{"state":"open"}}', { status: 200 });
+    }) as typeof fetch;
+    let scans = 0;
+    const app = createApp(cfg, {
+        store,
+        redis: { async scan() { scans++; return ['0', []]; }, async hgetall() { return {}; }, async quit() { return 'OK'; } },
+        tenantsDb: { async query() { return { rows: [] }; }, async end() {} },
+        runner: scriptedRunner(() => ({ code: 0, stdout: 'active' })),
+        fetchImpl,
+        webStaticDir: dir
+    });
+    const port = await app.start();
+    const base = `http://127.0.0.1:${port}`;
+    try {
+        const spa = await fetch(`${base}/alertas`);
+        assert.equal(spa.status, 200);
+        assert.match(await spa.text(), /cpanel-roster/);
+
+        const login = await fetch(`${base}/api/auth/login`, {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user: 'admin', password: 'pw-123456' })
+        });
+        assert.equal(login.status, 200);
+        const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0]!;
+
+        const ov = await fetch(`${base}/api/overview`, { headers: { cookie } });
+        assert.equal(ov.status, 200);
+        assert.deepEqual(((await ov.json()) as { health: unknown }).health, { xrosterdb: 'up', redis: 'up', evolution: 'up' });
+        assert.ok(scans >= 1);
+        assert.ok(evolution.some((u) => u.endsWith('/instance/connectionState/xiptv')));
+
+        const tank = await app.jarvis.handle({ message_id: 'W1', group_id: GROUP, sender_phone: '541122334455', from_me: false, text: '@Tank reiniciá streamer en 43' });
+        const code = /TK-\d+/.exec(tank.reply ?? '')?.[0];
+        if (code) {
+            const before = evolution.length;
+            const res = await fetch(`${base}/api/approvals/${code}/cancel`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' });
+            assert.equal(res.status, 200);
+            assert.equal(((await res.json()) as { status: string }).status, 'cancelled');
+            assert.ok(evolution.slice(before).some((u) => u.endsWith('/message/sendText/xiptv')));
+        }
+    } finally {
+        await app.stop();
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test('createApp: sin ROSTER_WEB_PASSWORD la API web queda cerrada (503) y /health sigue OK', async () => {
+    const h = harness();
+    const port = await h.app.start();
+    try {
+        assert.equal((await fetch(`http://127.0.0.1:${port}/api/overview`)).status, 503);
+        assert.equal((await fetch(`http://127.0.0.1:${port}/health`)).status, 200);
+    } finally {
+        await h.app.stop();
+        rmSync(h.dir, { recursive: true, force: true });
+    }
 });
 
 test('createApp: stop() es idempotente', async () => {

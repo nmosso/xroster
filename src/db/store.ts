@@ -98,6 +98,100 @@ export interface AuditEntry extends AuditClaim {
     metadata: JsonObject;
 }
 
+// ---------------- Consultas de lectura / analítica (REQ-2026-013 · cpanel-roster) ----------------
+
+export type QuotaRange = '5h' | '24h' | '7d' | '30d';
+export type QuotaBucket = 'hour' | 'day';
+
+/** Ventanas de `/api/quotas`: duración y granularidad de la serie temporal. */
+export const QUOTA_RANGES: Record<QuotaRange, { ms: number; bucket: QuotaBucket }> = {
+    '5h': { ms: 5 * 3600_000, bucket: 'hour' },
+    '24h': { ms: 24 * 3600_000, bucket: 'hour' },
+    '7d': { ms: 7 * 86_400_000, bucket: 'day' },
+    '30d': { ms: 30 * 86_400_000, bucket: 'day' }
+};
+
+export function isQuotaRange(v: unknown): v is QuotaRange {
+    return typeof v === 'string' && Object.prototype.hasOwnProperty.call(QUOTA_RANGES, v);
+}
+
+export interface ProviderTotals extends ProviderUsage {
+    avg_latency_ms: number;
+}
+
+export interface AgentModelUsage extends ProviderTotals {
+    agent_name: string;
+    model: string;
+}
+
+export interface QuotaSeriesPoint {
+    /** Inicio del bucket (UTC, truncado a hora o día). */
+    bucket: Date;
+    provider: string;
+    requests: number;
+    input_tokens: number;
+    output_tokens: number;
+    rate_limited: number;
+}
+
+export interface RateLimitEvent {
+    created_at: Date;
+    agent_name: string;
+    provider: string;
+    model: string;
+    error_code: string | null;
+}
+
+export interface QuotaReport {
+    /** Ordenado por provider. */
+    totals: ProviderTotals[];
+    /** Ordenado por agent_name, provider, model. */
+    by_agent_model: AgentModelUsage[];
+    /** Ordenado por bucket, provider. */
+    series: QuotaSeriesPoint[];
+    /** Eventos 429 más recientes primero (máx. RATE_LIMIT_EVENTS_MAX). */
+    rate_limit_events: RateLimitEvent[];
+}
+
+export const RATE_LIMIT_EVENTS_MAX = 50;
+
+export type AlertStateFilter = 'all' | AlertState;
+export interface AlertListFilter {
+    state: AlertStateFilter;
+    search?: string;
+}
+
+export interface ApprovalListFilter {
+    status: 'pending' | 'all';
+    limit: number;
+}
+
+export interface AuditListFilter {
+    agent?: string;
+    status?: AuditStatus;
+    search?: string;
+    limit: number;
+    offset: number;
+}
+
+export interface AuditPage {
+    total: number;
+    rows: AuditEntry[];
+}
+
+export const LIST_LIMIT_MAX = 200;
+
+/** Acota `limit` a 1..200 (valores no finitos → 50). */
+export function clampLimit(n: number, def = 50): number {
+    if (!Number.isFinite(n)) return def;
+    return Math.min(LIST_LIMIT_MAX, Math.max(1, Math.trunc(n)));
+}
+
+/** Acota `offset` a un entero >= 0. */
+export function clampOffset(n: number): number {
+    return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+}
+
 export interface RosterStore {
     initSchema(): Promise<void>;
     close(): Promise<void>;
@@ -126,6 +220,16 @@ export interface RosterStore {
     claimMessage(claim: AuditClaim): Promise<boolean>;
     completeMessage(messageId: string, completion: AuditCompletion): Promise<void>;
     getAudit(messageId: string): Promise<AuditEntry | null>;
+
+    // Lectura / analítica (cpanel-roster)
+    /** Agregados de quota_usage_ledger desde `since`, con serie temporal truncada (UTC) a `bucket`. */
+    quotaReport(since: Date, bucket: QuotaBucket): Promise<QuotaReport>;
+    /** sentinel_alert_state filtrado por estado y búsqueda literal (case-insensitive); orden alert_key. */
+    listAlerts(filter: AlertListFilter): Promise<AlertStateRow[]>;
+    /** action_approvals más recientes primero; limit acotado 1..200. */
+    listApprovals(filter: ApprovalListFilter): Promise<Approval[]>;
+    /** agent_audit_log paginado (created_at DESC, message_id DESC); limit 1..200, offset >= 0. */
+    listAudit(filter: AuditListFilter): Promise<AuditPage>;
 
     // system_flags
     getFlag(key: string): Promise<string | null>;

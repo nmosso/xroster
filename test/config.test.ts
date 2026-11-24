@@ -44,6 +44,26 @@ test('loadConfig: validaciones de formato', () => {
     assert.throws(bad({ OWNER_WHATSAPP_PHONES: ' , ' }), /OWNER_WHATSAPP_PHONES/);
 });
 
+test('loadConfig web (REQ-2026-013): opcional, defaults y ROSTER_COOKIE_SECURE', () => {
+    const c = loadConfig(VALID_ENV);
+    assert.deepEqual(c.web, { user: 'admin', password: null, sessionSecret: null, cookieSecure: false });
+
+    const full = loadConfig({ ...VALID_ENV, ROSTER_WEB_USER: ' ops ', ROSTER_WEB_PASSWORD: 'pw', ROSTER_SESSION_SECRET: 's'.repeat(64) });
+    assert.deepEqual(full.web, { user: 'ops', password: 'pw', sessionSecret: 's'.repeat(64), cookieSecure: false });
+
+    assert.equal(loadConfig({ ...VALID_ENV, NODE_ENV: 'production' }).web.cookieSecure, true);
+    assert.equal(loadConfig({ ...VALID_ENV, NODE_ENV: 'production', ROSTER_COOKIE_SECURE: 'false' }).web.cookieSecure, false);
+    assert.equal(loadConfig({ ...VALID_ENV, ROSTER_COOKIE_SECURE: 'true' }).web.cookieSecure, true);
+    assert.equal(loadConfig({ ...VALID_ENV, ROSTER_COOKIE_SECURE: 'false' }).web.cookieSecure, false);
+});
+
+test('.env.example documenta las variables de cpanel-roster (REQ-2026-013 §5.1)', () => {
+    const example = readFileSync(join(__dirname, '..', '.env.example'), 'utf8');
+    for (const k of ['ROSTER_WEB_USER', 'ROSTER_WEB_PASSWORD', 'ROSTER_SESSION_SECRET', 'ROSTER_COOKIE_SECURE']) {
+        assert.match(example, new RegExp(`^${k}=`, 'm'), k);
+    }
+});
+
 test('.env.example documenta todas las variables de §5.3', () => {
     const example = readFileSync(join(__dirname, '..', '.env.example'), 'utf8');
     for (const k of [

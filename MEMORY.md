@@ -2,8 +2,8 @@
 
 | Metadato | Detalle |
 | :--- | :--- |
-| **Spec** | `REQ-2026-012` (02_Aprobado) · RFC `RFC-2026-003` |
-| **Estado** | T-02..T-08 implementadas · `tsc --noEmit` limpio · `npm test` 143/143 verde |
+| **Spec** | `REQ-2026-012` + `REQ-2026-013` (cpanel-roster) · RFC `RFC-2026-003` |
+| **Estado** | REQ-012 T-02..T-08 · REQ-013 T-01..T-05 implementadas · tsc limpio (backend + web) · `npm test` verde |
 | **Última actualización** | 2026-11-24 |
 | **Pendiente fuera de este repo** | T-01 (forward en `xBackend`) · actualizar `Planning-X/Memory/INDEX.md` |
 
@@ -18,7 +18,10 @@ src/
   index.ts            entrada: dotenv (XROSTER_ENV_FILE | ../.env.roster, sin override) → loadConfig → createApp → start; SIGINT/SIGTERM graceful (10 s)
   app.ts              ensamblado DI (createApp(cfg, deps)); deps inyectables para tests L2
   config.ts           AppConfig tipado + ConfigError (lista todos los problemas)
-  server.ts           node:http: GET /health · POST /internal/whatsapp/webhook (401/400/413/200)
+  server.ts           node:http: GET /health · POST /internal/whatsapp/webhook (401/400/413/200) · /api/* → apiRouter ·
+                      SPA dist/web (solo index.html, /assets/*, públicos de raíz; fallback index.html fuera de /api,/internal,/health)
+  web/auth.ts         cookie xroster_session HMAC-SHA256 (12 h), timingSafeEqual, rate-limit 5 fallos/IP/15 min, fail-closed 503
+  web/apiRouter.ts    REST cpanel-roster: auth, overview, control/pause, quotas, alerts(+silence), approvals(confirm/cancel), audit
   core/
     jarvis.ts         auth E.164, dedup, comandos deterministas, router de intenciones, firma de agentes
     approvals.ts      L1: código TK-/SH-XXX, TTL 5 min, compare-and-set (idempotente)
@@ -41,6 +44,9 @@ src/
     monitoringSource.ts SCAN monitoring:tenant:* + HGETALL
     planningRepo.ts   clone/pull --ff-only, lectura segura, publishDraft (solo draft/shikamaru-*)
   agents/ sentinel.ts · tank.ts · shikamaru.ts
+web/                         SPA cpanel-roster (Vite + React 18 + TS, sin libs de gráficos: SVG propio en components/UsageChart)
+  src/api.ts                 fetch same-origin, 401 → Login global · views/{Login,Overview,Quotas,Alerts,Approvals}.tsx
+deploy/nginx-roster.xisrv.xyz.conf  TLS + `location ^~ /internal/ { return 403; }` + proxy_pass 127.0.0.1:3900
 sql/001_init_xrosterdb.sql   DDL idempotente (5 tablas, pgcrypto, JSONB, índices §5.1)
 test/*.test.ts (npm test) · test/sql/*.test.ts (npm run test:sql, requiere TEST_PG_URL)
 scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shell)
@@ -70,7 +76,16 @@ scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shel
 - **Lookup de tenants:** `position::text = $1 OR tenantid = $1 OR tenantid = 'server'||$1 OR name ILIKE $2`
   (en `public.tenants` no existe columna `tag`; `tenantid` canónico es `server<position>`).
 - **No-Astra:** `neutralize()` en ProviderRouter (prompts/salidas) y EvolutionClient (salida);
-  test que escanea `src/` y `sql/` exige cero menciones.
+  test que escanea `src/`, `sql/` y `web/src/` + `web/index.html` exige cero menciones (ojo: es substring
+  case-insensitive, palabras como "arr-astrar" también fallan).
+- **cpanel-roster:** misma instancia `ApprovalManager` que WhatsApp (idempotente, TTL 5 min); fallo de Evolution
+  al avisar al War Room no revierte ni devuelve 500. Overview tolera Redis/DB caídos (`down` por sección).
+  CSRF: SameSite=Lax + chequeo `Origin == Host` en métodos no-GET. `X-Real-IP` solo se confía desde
+  loopback/red privada (Nginx host / bridge Docker). Todo POST/PUT exige `content-type: application/json`.
+- **Build web:** Vite emite `web/dist` (index.html + assets/); el Dockerfile (stage `web-builder`) lo copia a
+  `/app/dist/web`, que convive con los módulos backend `dist/web/*.js` (nunca servidos: solo assets/ + index).
+  Sin `dist/web/index.html` el servidor no sirve SPA (404) — en local: `cp -r web/dist/* dist/web/` o usar
+  `cd web && npm run dev` (proxy `/api` → 127.0.0.1:3900).
 
 ## 4. Operación
 - Entorno: `cp .env.example ../.env.roster` (hermano del repo, fuera de git). `docker-compose.yml` usa
@@ -82,11 +97,15 @@ scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shel
 - `CLAUDE_PROVIDER=cli` requiere `claude` autenticado dentro del contenedor (volumen `claude-home`).
 - Redis/IRD/SSH vía red Tailscale `100.64.N.*`: el host Docker debe enrutar hacia esa red.
 - `npm run test:sql`: `TEST_PG_URL=postgres://postgres:postgres@localhost:5432/postgres` (crea y borra BD efímera).
+- cpanel-roster: definir `ROSTER_WEB_USER/PASSWORD`, `ROSTER_SESSION_SECRET` (`openssl rand -hex 32`) y
+  `ROSTER_COOKIE_SECURE` en `../.env.roster`. Nginx: copiar `deploy/nginx-roster.xisrv.xyz.conf` a
+  `/etc/nginx/sites-available/roster.xisrv.xyz`, `certbot --nginx -d roster.xisrv.xyz`, `nginx -t && reload`.
 
 ## 5. Verificación (2026-11-24)
-- `npx tsc --noEmit` → 0 errores. `npm test` → 143 tests, 143 pass, 0 fail.
-- `npm run build` → OK. `npm run test:sql` → SKIP (sin `TEST_PG_URL` en el entorno de desarrollo).
-- **No verificado aún:** `docker build` y `test:sql` contra PostgreSQL real (no disponibles en la sesión).
+- `npx tsc --noEmit` → 0 errores. `npm test` → 190 tests, 190 pass, 0 fail (incluye auth/API web/store + No-Astra web).
+- `npm run build` → OK. `cd web && npx tsc --noEmit && npm run build` → OK (~176 kB JS / 56 kB gzip).
+- `npm run test:sql` → SKIP (sin `TEST_PG_URL` en el entorno de desarrollo).
+- **No verificado aún:** `docker build`, `test:sql` contra PostgreSQL real y prueba visual del SPA contra API real.
 
 ## 6. Compromiso de completitud
 - [ ] Ejecutar `npm run test:sql` contra PostgreSQL efímero y `docker build` (DoD §6.2).

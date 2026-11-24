@@ -50,4 +50,18 @@ export class EvolutionClient implements Messenger {
         });
         if (!res.ok) throw new EvolutionHttpError(res.status, await res.text().catch(() => ''));
     }
+
+    /** Sonda de salud (cpanel-roster): estado de la instancia; nunca lanza. */
+    async ping(timeoutMs = 3000): Promise<boolean> {
+        const f = this.opts.fetchImpl ?? fetch;
+        try {
+            const res = await f(`${this.baseUrl}/instance/connectionState/${encodeURIComponent(this.opts.instance)}`, {
+                method: 'GET', headers: { apikey: this.opts.apiKey }, signal: AbortSignal.timeout(timeoutMs)
+            });
+            await res.body?.cancel().catch(() => undefined);
+            return res.ok;
+        } catch {
+            return false;
+        }
+    }
 }

@@ -30,6 +30,15 @@ export interface AppConfig {
     sentinelAlertCooldownMs: number;
     sentinelStormThreshold: number;
     tankServiceUnits: string | null;
+    /** cpanel-roster (REQ-2026-013). Sin password o secret → `/api/*` responde 503 (fail-closed). */
+    web: WebConfig;
+}
+
+export interface WebConfig {
+    user: string;
+    password: string | null;
+    sessionSecret: string | null;
+    cookieSecure: boolean;
 }
 
 export class ConfigError extends Error {
@@ -40,6 +49,13 @@ export class ConfigError extends Error {
 }
 
 type Env = Record<string, string | undefined>;
+
+/** `Secure` por defecto en producción; `'false'`/`'true'` explícitos ganan. */
+function cookieSecure(raw: string, nodeEnv: string): boolean {
+    if (raw.toLowerCase() === 'false') return false;
+    if (raw.toLowerCase() === 'true') return true;
+    return nodeEnv === 'production';
+}
 
 export function loadConfig(env: Env): AppConfig {
     const problems: string[] = [];
@@ -105,7 +121,14 @@ export function loadConfig(env: Env): AppConfig {
         sentinelPollMs: int('SENTINEL_POLL_MS', 60_000, 1000),
         sentinelAlertCooldownMs: int('SENTINEL_ALERT_COOLDOWN_MS', 1_800_000, 0),
         sentinelStormThreshold: int('SENTINEL_STORM_THRESHOLD', 3, 1),
-        tankServiceUnits: opt('TANK_SERVICE_UNITS')
+        tankServiceUnits: opt('TANK_SERVICE_UNITS'),
+        web: {
+            user: str('ROSTER_WEB_USER') || 'admin',
+            // La password no se recorta: los espacios pueden ser parte de la clave.
+            password: env['ROSTER_WEB_PASSWORD'] ? env['ROSTER_WEB_PASSWORD'] : null,
+            sessionSecret: opt('ROSTER_SESSION_SECRET'),
+            cookieSecure: cookieSecure(str('ROSTER_COOKIE_SECURE'), str('NODE_ENV'))
+        }
     };
     if (problems.length > 0) throw new ConfigError(problems);
     return cfg;

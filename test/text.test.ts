@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { truncate, neutralize, MAX_TOOL_OUTPUT_CHARS } from '../src/core/text';
 
@@ -46,6 +46,16 @@ function walk(dir: string): string[] {
 test('Regla No-Astra: cero menciones del término prohibido en src/ y sql/', () => {
     const root = join(__dirname, '..');
     const files = [...walk(join(root, 'src')), ...walk(join(root, 'sql'))];
+    const offenders = files.filter((f) => new RegExp(FORBIDDEN, 'i').test(readFileSync(f, 'utf8')));
+    assert.deepEqual(offenders, []);
+});
+
+test('Regla No-Astra (RF-07): cero menciones del término prohibido en el frontend web/src/ e index.html', () => {
+    const root = join(__dirname, '..');
+    const webSrc = join(root, 'web', 'src');
+    assert.ok(existsSync(webSrc), 'web/src/ debe existir (cpanel-roster)');
+    const files = [...walk(webSrc), join(root, 'web', 'index.html')].filter((f) => existsSync(f));
+    assert.ok(files.length > 0, 'web/src/ no puede estar vacío');
     const offenders = files.filter((f) => new RegExp(FORBIDDEN, 'i').test(readFileSync(f, 'utf8')));
     assert.deepEqual(offenders, []);
 });

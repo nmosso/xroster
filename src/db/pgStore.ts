@@ -2,9 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Pool, type PoolConfig } from 'pg';
 import type {
-    AlertStateRow, Approval, ApprovalPatch, ApprovalStatus, AuditClaim, AuditCompletion, AuditEntry, JsonObject, NewApproval,
-    ProviderUsage, QuotaUsageEntry, RosterStore
+    AgentModelUsage, AlertListFilter, AlertStateRow, Approval, ApprovalListFilter, ApprovalPatch, ApprovalStatus, AuditClaim,
+    AuditCompletion, AuditEntry, AuditListFilter, AuditPage, JsonObject, NewApproval, ProviderTotals, ProviderUsage, QuotaBucket,
+    QuotaReport, QuotaSeriesPoint, QuotaUsageEntry, RateLimitEvent, RosterStore
 } from './store';
+import { RATE_LIMIT_EVENTS_MAX, clampLimit, clampOffset } from './store';
+
+/** Patrón ILIKE literal (escapa `\`, `%`, `_`); null si la búsqueda está vacía. */
+export function likePattern(search: string | undefined): string | null {
+    const q = (search ?? '').trim();
+    return q ? `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+}
 
 /** Ruta al DDL idempotente; válida tanto desde src/db (tsx) como desde dist/db (build). */
 export const INIT_SQL_PATH = join(__dirname, '..', '..', 'sql', '001_init_xrosterdb.sql');
@@ -171,6 +179,106 @@ export class PgRosterStore implements RosterStore {
             [messageId]
         );
         return rows[0] ?? null;
+    }
+
+    async quotaReport(since: Date, bucket: QuotaBucket): Promise<QuotaReport> {
+        const unit = bucket === 'day' ? 'day' : 'hour'; // whitelist: nunca se interpola input del cliente
+        const aggCols = `COUNT(*)::bigint                                   AS requests,
+                    COALESCE(SUM(input_tokens), 0)::bigint            AS input_tokens,
+                    COALESCE(SUM(output_tokens), 0)::bigint           AS output_tokens,
+                    COALESCE(SUM(cached_tokens), 0)::bigint           AS cached_tokens,
+                    COUNT(*) FILTER (WHERE rate_limited)::bigint      AS rate_limited,
+                    COUNT(*) FILTER (WHERE status = 'error')::bigint  AS errors,
+                    COALESCE(ROUND(AVG(latency_ms)), 0)::bigint       AS avg_latency_ms`;
+        const [totals, byAgent, series, events] = await Promise.all([
+            this.pool.query<Record<string, unknown>>(
+                `SELECT provider, ${aggCols} FROM public.quota_usage_ledger WHERE created_at >= $1 GROUP BY provider ORDER BY provider`,
+                [since]
+            ),
+            this.pool.query<Record<string, unknown>>(
+                `SELECT agent_name, provider, model, ${aggCols} FROM public.quota_usage_ledger WHERE created_at >= $1
+                  GROUP BY agent_name, provider, model ORDER BY agent_name, provider, model`,
+                [since]
+            ),
+            this.pool.query<Record<string, unknown>>(
+                `SELECT (date_trunc('${unit}', created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AS bucket, provider,
+                        COUNT(*)::bigint AS requests,
+                        COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
+                        COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
+                        COUNT(*) FILTER (WHERE rate_limited)::bigint AS rate_limited
+                   FROM public.quota_usage_ledger WHERE created_at >= $1
+                  GROUP BY 1, provider ORDER BY 1, provider`,
+                [since]
+            ),
+            this.pool.query<RateLimitEvent>(
+                `SELECT created_at, agent_name, provider, model, error_code FROM public.quota_usage_ledger
+                  WHERE created_at >= $1 AND rate_limited ORDER BY created_at DESC LIMIT $2`,
+                [since, RATE_LIMIT_EVENTS_MAX]
+            )
+        ]);
+        const toTotals = (r: Record<string, unknown>): ProviderTotals => ({
+            provider: String(r['provider']),
+            requests: Number(r['requests']),
+            input_tokens: Number(r['input_tokens']),
+            output_tokens: Number(r['output_tokens']),
+            cached_tokens: Number(r['cached_tokens']),
+            rate_limited: Number(r['rate_limited']),
+            errors: Number(r['errors']),
+            avg_latency_ms: Number(r['avg_latency_ms'])
+        });
+        return {
+            totals: totals.rows.map(toTotals),
+            by_agent_model: byAgent.rows.map((r): AgentModelUsage => ({ ...toTotals(r), agent_name: String(r['agent_name']), model: String(r['model']) })),
+            series: series.rows.map((r): QuotaSeriesPoint => ({
+                bucket: new Date(r['bucket'] as Date),
+                provider: String(r['provider']),
+                requests: Number(r['requests']),
+                input_tokens: Number(r['input_tokens']),
+                output_tokens: Number(r['output_tokens']),
+                rate_limited: Number(r['rate_limited'])
+            })),
+            rate_limit_events: events.rows
+        };
+    }
+
+    async listAlerts(filter: AlertListFilter): Promise<AlertStateRow[]> {
+        const search = likePattern(filter.search);
+        const { rows } = await this.pool.query<AlertStateRow>(
+            `SELECT ${ALERT_COLS} FROM public.sentinel_alert_state
+              WHERE ($1::text = 'all' OR state = $1)
+                AND ($2::text IS NULL OR alert_key ILIKE $2 OR tenant_position ILIKE $2 OR tenant_name ILIKE $2
+                     OR component ILIKE $2 OR last_detail ILIKE $2)
+              ORDER BY alert_key`,
+            [filter.state, search]
+        );
+        return rows;
+    }
+
+    async listApprovals(filter: ApprovalListFilter): Promise<Approval[]> {
+        const { rows } = await this.pool.query<Approval>(
+            `SELECT ${APPROVAL_COLS} FROM public.action_approvals
+              WHERE ($1::text = 'all' OR status = 'pending')
+              ORDER BY requested_at DESC, code DESC LIMIT $2`,
+            [filter.status, clampLimit(filter.limit)]
+        );
+        return rows;
+    }
+
+    async listAudit(filter: AuditListFilter): Promise<AuditPage> {
+        const where = `WHERE ($1::text IS NULL OR agent_name = $1)
+                AND ($2::text IS NULL OR status = $2)
+                AND ($3::text IS NULL OR message_id ILIKE $3 OR sender_phone ILIKE $3 OR input_text ILIKE $3 OR output_text ILIKE $3)`;
+        const params = [filter.agent || null, filter.status || null, likePattern(filter.search)];
+        const [count, page] = await Promise.all([
+            this.pool.query<{ n: string }>(`SELECT COUNT(*)::bigint AS n FROM public.agent_audit_log ${where}`, params),
+            this.pool.query<AuditEntry>(
+                `SELECT message_id, sender_phone, input_text, created_at, agent_name, output_text, duration_ms, status, metadata
+                   FROM public.agent_audit_log ${where}
+                  ORDER BY created_at DESC, message_id DESC LIMIT $4 OFFSET $5`,
+                [...params, clampLimit(filter.limit), clampOffset(filter.offset)]
+            )
+        ]);
+        return { total: Number(count.rows[0]?.n ?? 0), rows: page.rows };
     }
 
     async getFlag(key: string): Promise<string | null> {

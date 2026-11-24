@@ -1,5 +1,15 @@
 # syntax=docker/dockerfile:1
-# xRoster — imagen multi-stage (REQ-2026-012 T-02)
+# xRoster — imagen multi-stage (REQ-2026-012 T-02 · REQ-2026-013 T-05)
+
+# ---------- Etapa 0: web-builder (cpanel-roster SPA → web/dist) ----------
+FROM node:22-bookworm-slim AS web-builder
+WORKDIR /app/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/index.html web/tsconfig.json web/vite.config.ts ./
+COPY web/public ./public
+COPY web/src ./src
+RUN npm run build
 
 # ---------- Etapa 1: build ----------
 FROM node:22-bookworm-slim AS build
@@ -25,6 +35,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# SPA servida por src/server.ts desde dist/web (solo index.html, /assets/* y archivos públicos de raíz)
+COPY --from=web-builder /app/web/dist ./dist/web
 COPY package.json ./
 COPY sql ./sql
 

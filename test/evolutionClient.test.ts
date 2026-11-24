@@ -53,6 +53,17 @@ test('HTTP no-2xx -> EvolutionHttpError', async () => {
     await assert.rejects(client(fetchImpl).sendText(GROUP, 'x'), EvolutionHttpError);
 });
 
+test('ping: GET /instance/connectionState/{instance} con apikey; true solo si 2xx; error de red -> false', async () => {
+    const ok = spyFetch(200);
+    assert.equal(await client(ok.fetchImpl).ping(), true);
+    assert.equal(ok.calls[0]!.url, 'http://evo:8080/instance/connectionState/xiptv');
+    assert.equal(ok.calls[0]!.init.method, 'GET');
+    assert.equal((ok.calls[0]!.init.headers as Record<string, string>)['apikey'], 'KEY');
+    assert.equal(await client(spyFetch(401).fetchImpl).ping(), false);
+    const broken = (async () => { throw new Error('ECONNREFUSED'); }) as typeof fetch;
+    assert.equal(await client(broken).ping(), false);
+});
+
 test('constructor exige commandGroupId terminado en @g.us', () => {
     const { fetchImpl } = spyFetch();
     assert.throws(() => new EvolutionClient({ baseUrl: 'http://e', apiKey: 'k', instance: 'i', commandGroupId: '549110@s.whatsapp.net', fetchImpl }));
