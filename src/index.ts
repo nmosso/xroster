@@ -33,6 +33,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
     if (err instanceof ConfigError) consoleLogger.error(err.message);
-    else consoleLogger.error('xRooster no pudo iniciar', { error: errorMessage(err) });
+    else consoleLogger.error('xRoster no pudo iniciar', { error: errorMessage(err) });
     process.exit(1);
 });

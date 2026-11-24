@@ -2,7 +2,7 @@ import { parseOwnerPhones } from './core/phone';
 
 export type ClaudeProviderMode = 'cli' | 'api';
 
-/** Configuración tipada de xRooster (REQ-2026-012 §5.3). 100% desde .env → portable a VM dedicada. */
+/** Configuración tipada de xRoster (REQ-2026-012 §5.3). 100% desde .env → portable a VM dedicada. */
 export interface AppConfig {
     port: number;
     webhookSecret: string;
@@ -11,7 +11,7 @@ export interface AppConfig {
     evolutionApiUrl: string;
     evolutionApiKey: string;
     evolutionInstance: string;
-    pgXroosterUrl: string;
+    pgXrosterUrl: string;
     pgXserverRoUrl: string;
     redisUrl: string;
     sshKeyPath: string;
@@ -60,8 +60,8 @@ export function loadConfig(env: Env): AppConfig {
         return Number(raw);
     };
 
-    const webhookSecret = req('XROOSTER_WEBHOOK_SECRET');
-    if (webhookSecret && webhookSecret.length < 16) problems.push('XROOSTER_WEBHOOK_SECRET debe tener al menos 16 caracteres');
+    const webhookSecret = req('XROSTER_WEBHOOK_SECRET');
+    if (webhookSecret && webhookSecret.length < 16) problems.push('XROSTER_WEBHOOK_SECRET debe tener al menos 16 caracteres');
 
     const commandGroupId = req('WHATSAPP_COMMAND_GROUP_ID');
     if (commandGroupId && !/^[0-9]+(-[0-9]+)?@g\.us$/.test(commandGroupId)) problems.push('WHATSAPP_COMMAND_GROUP_ID debe ser un JID de grupo (…@g.us)');
@@ -87,7 +87,7 @@ export function loadConfig(env: Env): AppConfig {
         evolutionApiUrl: req('EVOLUTION_API_URL'),
         evolutionApiKey: req('EVOLUTION_API_KEY'),
         evolutionInstance: req('EVOLUTION_INSTANCE_NAME'),
-        pgXroosterUrl: req('PG_XROOSTER_URL'),
+        pgXrosterUrl: req('PG_XROSTER_URL'),
         pgXserverRoUrl: req('PG_XSERVER_RO_URL'),
         redisUrl: req('REDIS_URL'),
         sshKeyPath: str('SSH_KEY_PATH') || '/run/secrets/ssh_key',

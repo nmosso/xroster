@@ -140,7 +140,7 @@ export class Shikamaru implements SpecialistAgent {
         const content = String(a.payload['content'] ?? '');
         const title = String(a.payload['title'] ?? fileName);
         const r = await this.o.repo.publishDraft({
-            branch, fileName, content, commitMessage: `docs(draft): ${title} [${a.code}]\n\nGenerado por Shikamaru (xRooster) con aprobación L1.`
+            branch, fileName, content, commitMessage: `docs(draft): ${title} [${a.code}]\n\nGenerado por Shikamaru (xRoster) con aprobación L1.`
         });
         return `📤 Rama ${r.branch} publicada (commit ${r.commit || 'n/d'}) con ${r.path}. Abrí un PR hacia main para revisión.`;
     }

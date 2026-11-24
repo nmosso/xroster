@@ -1,4 +1,4 @@
-import type { AlertStateRow, RoosterStore } from '../db/store';
+import type { AlertStateRow, RosterStore } from '../db/store';
 import { FLAG_PAUSED, FLAG_SILENCED_ALL_UNTIL, tenantSilenceFlag } from '../db/store';
 import { normalizeTenantRef } from '../db/tenantsRepo';
 import { COMPONENT_LABEL, evaluateSnapshot, formatAge, type Component } from '../core/health';
@@ -8,7 +8,7 @@ import { SIGNATURES } from '../core/jarvis';
 import type { MonitoringSource } from '../tools/monitoringSource';
 
 export interface SentinelOptions {
-    store: RoosterStore;
+    store: RosterStore;
     source: MonitoringSource;
     notify: (text: string) => Promise<void>;
     /** Nombre legible del tenant (cacheado por el ensamblador). */

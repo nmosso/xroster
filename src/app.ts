@@ -2,8 +2,8 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import Redis from 'ioredis';
 import type { AppConfig } from './config';
-import type { RoosterStore } from './db/store';
-import { PgRoosterStore } from './db/pgStore';
+import type { RosterStore } from './db/store';
+import { PgRosterStore } from './db/pgStore';
 import { TenantsRepo, createReadOnlyPool, type Queryable } from './db/tenantsRepo';
 import { ApprovalManager } from './core/approvals';
 import { EvolutionClient } from './core/evolutionClient';
@@ -23,7 +23,7 @@ import { createServer } from './server';
 
 /** Dependencias externas inyectables (tests L2); por defecto se crean desde la configuración. */
 export interface AppDeps {
-    store?: RoosterStore;
+    store?: RosterStore;
     redis?: RedisLike & { quit(): Promise<unknown> };
     tenantsDb?: Queryable & { end(): Promise<void> };
     runner?: CommandRunner;
@@ -48,7 +48,7 @@ export function createApp(cfg: AppConfig, deps: AppDeps = {}): App {
     const logger = deps.logger ?? silentLogger;
     const runner = deps.runner ?? spawnRunner;
     const fetchImpl = deps.fetchImpl ?? fetch;
-    const store = deps.store ?? new PgRoosterStore(cfg.pgXroosterUrl);
+    const store = deps.store ?? new PgRosterStore(cfg.pgXrosterUrl);
     const redis = deps.redis ?? toRedisLike(new Redis(cfg.redisUrl, { maxRetriesPerRequest: 2, enableOfflineQueue: false }), logger);
     const tenantsDb = deps.tenantsDb ?? createReadOnlyPool(cfg.pgXserverRoUrl);
     const tenants = new TenantsRepo(tenantsDb);
@@ -116,7 +116,7 @@ export function createApp(cfg: AppConfig, deps: AppDeps = {}): App {
             });
             sentinel.start();
             const port = (server.address() as AddressInfo).port;
-            logger.info('xRooster iniciado', { port, sentinel_poll_ms: cfg.sentinelPollMs, claude_provider: cfg.claudeProvider, gemini: Boolean(adapters.gemini) });
+            logger.info('xRoster iniciado', { port, sentinel_poll_ms: cfg.sentinelPollMs, claude_provider: cfg.claudeProvider, gemini: Boolean(adapters.gemini) });
             return port;
         },
         stop() {
@@ -129,7 +129,7 @@ export function createApp(cfg: AppConfig, deps: AppDeps = {}): App {
                 await close('store', () => store.close());
                 await close('redis', () => redis.quit());
                 await close('tenantsDb', () => tenantsDb.end());
-                logger.info('xRooster detenido');
+                logger.info('xRoster detenido');
             })();
             return stopping;
         }

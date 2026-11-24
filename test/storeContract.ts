@@ -1,7 +1,7 @@
-// Suite de contrato de RoosterStore: la ejecutan MemoryRoosterStore (npm test) y PgRoosterStore (npm run test:sql).
+// Suite de contrato de RosterStore: la ejecutan MemoryRosterStore (npm test) y PgRosterStore (npm run test:sql).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { RoosterStore, NewApproval, AlertStateRow } from '../src/db/store';
+import type { RosterStore, NewApproval, AlertStateRow } from '../src/db/store';
 
 const MIN = 60_000;
 
@@ -36,7 +36,7 @@ function alertFixture(key: string, overrides: Partial<AlertStateRow> = {}): Aler
     };
 }
 
-export function runStoreContract(label: string, factory: () => Promise<RoosterStore>): void {
+export function runStoreContract(label: string, factory: () => Promise<RosterStore>): void {
     test(`[${label}] ledger: inserta y agrega por proveedor desde una fecha`, async () => {
         const s = await factory();
         const now = new Date();

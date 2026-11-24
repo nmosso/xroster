@@ -1,8 +1,8 @@
 {
-  "name": "xrooster",
+  "name": "xroster",
   "version": "0.1.0",
   "private": true,
-  "description": "xRooster — War Room de agentes operativos xIPTV (Jarvis, Sentinel, Tank, Shikamaru). REQ-2026-012 / RFC-2026-003.",
+  "description": "xRoster — War Room de agentes operativos xIPTV (Jarvis, Sentinel, Tank, Shikamaru). REQ-2026-012 / RFC-2026-003.",
   "type": "commonjs",
   "main": "dist/index.js",
   "engines": {

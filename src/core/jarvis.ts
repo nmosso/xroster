@@ -1,4 +1,4 @@
-import type { ProviderName, RoosterStore } from '../db/store';
+import type { ProviderName, RosterStore } from '../db/store';
 import { FLAG_PAUSED, FLAG_SILENCED_ALL_UNTIL } from '../db/store';
 import { ProviderError, formatQuotaSummary, type ProviderRouter } from '../providers/providerRouter';
 import type { ApprovalManager } from './approvals';
@@ -125,7 +125,7 @@ export type HandleStatus = 'ok' | 'ignored' | 'unauthorized' | 'duplicate' | 'er
 export interface JarvisDeps {
     commandGroupId: string;
     ownerPhones: Set<string>;
-    store: RoosterStore;
+    store: RosterStore;
     messenger: Messenger;
     approvals: ApprovalManager;
     router: ProviderRouter;

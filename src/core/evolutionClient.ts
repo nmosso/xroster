@@ -1,13 +1,13 @@
 import { neutralize } from './text';
 
-/** Canal de salida de xRooster. La única implementación productiva es EvolutionClient (guardrail RF-03). */
+/** Canal de salida de xRoster. La única implementación productiva es EvolutionClient (guardrail RF-03). */
 export interface Messenger {
     sendText(target: string, text: string): Promise<void>;
 }
 
 export class ForbiddenTargetError extends Error {
     constructor(readonly target: string) {
-        super(`Destino prohibido: xRooster solo puede enviar al grupo War Room (intento: "${target}")`);
+        super(`Destino prohibido: xRoster solo puede enviar al grupo War Room (intento: "${target}")`);
         this.name = 'ForbiddenTargetError';
     }
 }

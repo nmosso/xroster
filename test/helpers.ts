@@ -9,13 +9,13 @@ export const OWNER = '5491122334455';
 /** Entorno mínimo válido para loadConfig (valores ficticios). */
 export const VALID_ENV: Record<string, string> = {
     PORT: '3900',
-    XROOSTER_WEBHOOK_SECRET: 'a-very-long-secret-value',
+    XROSTER_WEBHOOK_SECRET: 'a-very-long-secret-value',
     WHATSAPP_COMMAND_GROUP_ID: GROUP,
     OWNER_WHATSAPP_PHONES: '+54 11 2233-4455, 14155550100',
     EVOLUTION_API_URL: 'http://evo:8080',
     EVOLUTION_API_KEY: 'k',
     EVOLUTION_INSTANCE_NAME: 'xiptv',
-    PG_XROOSTER_URL: 'postgres://u:p@h:5432/xroosterdb',
+    PG_XROSTER_URL: 'postgres://u:p@h:5432/xrosterdb',
     PG_XSERVER_RO_URL: 'postgres://ro:p@h:5432/xserver',
     REDIS_URL: 'redis://redis:6379'
 };

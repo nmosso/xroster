@@ -28,7 +28,7 @@ test('spawnRunner: timeout duro mata el proceso y marca timedOut (L3, sin colgar
 });
 
 test('spawnRunner: binario inexistente -> code null + error, sin excepción', async () => {
-    const r = await spawnRunner('binario-que-no-existe-xrooster', [], { timeoutMs: 2000 });
+    const r = await spawnRunner('binario-que-no-existe-xroster', [], { timeoutMs: 2000 });
     assert.equal(r.code, null);
     assert.ok(r.error);
 });

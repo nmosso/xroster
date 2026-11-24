@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import {
     ProviderRouter, ProviderError, classifyProviderError, formatQuotaSummary,
     type ProviderAdapter, type LlmRequest, type LlmCompletion
@@ -24,7 +24,7 @@ function steppingClock(stepMs: number, start = Date.parse('2026-11-24T12:00:00Z'
 const REQ: LlmRequest = { agent: 'jarvis', taskType: 'route', prompt: 'hola' };
 
 test('complete ok: registra provider/model/agent/task/tokens/latencia/status=ok en el ledger', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const gem = fakeAdapter('gemini', async () => ({ text: 'tank', inputTokens: 12, outputTokens: 3, cachedTokens: 4 }));
     const router = new ProviderRouter({ store, adapters: { gemini: gem }, clock: steppingClock(150) });
     const res = await router.complete('gemini', { ...REQ, metadata: { message_id: 'M1' } });
@@ -46,7 +46,7 @@ test('complete ok: registra provider/model/agent/task/tokens/latencia/status=ok 
 });
 
 test('complete 429: registra status=rate_limited + rate_limited=true y lanza ProviderError(rateLimited)', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const err = Object.assign(new Error('Too Many Requests'), { status: 429 });
     const router = new ProviderRouter({ store, adapters: { claude: fakeAdapter('claude', async () => { throw err; }) } });
     await assert.rejects(router.complete('claude', { ...REQ, agent: 'shikamaru', taskType: 'planning' }), (e: unknown) => {
@@ -63,7 +63,7 @@ test('complete 429: registra status=rate_limited + rate_limited=true y lanza Pro
 });
 
 test('complete error genérico: registra status=error con error_code y relanza', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const err = Object.assign(new Error('boom'), { status: 500 });
     const router = new ProviderRouter({ store, adapters: { gemini: fakeAdapter('gemini', async () => { throw err; }) } });
     await assert.rejects(router.complete('gemini', REQ), (e: unknown) => e instanceof ProviderError && !e.rateLimited);
@@ -73,13 +73,13 @@ test('complete error genérico: registra status=error con error_code y relanza',
 });
 
 test('proveedor no configurado -> ProviderError not_configured', async () => {
-    const router = new ProviderRouter({ store: new MemoryRoosterStore(), adapters: {} });
+    const router = new ProviderRouter({ store: new MemoryRosterStore(), adapters: {} });
     assert.equal(router.has('claude'), false);
     await assert.rejects(router.complete('claude', REQ), (e: unknown) => e instanceof ProviderError && e.code === 'not_configured');
 });
 
 test('falla del ledger no rompe la invocación (resiliencia)', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     store.insertQuotaUsage = async () => { throw new Error('pg caído'); };
     const router = new ProviderRouter({
         store, adapters: { gemini: fakeAdapter('gemini', async () => ({ text: 'ok', inputTokens: 1, outputTokens: 1, cachedTokens: 0 })) },
@@ -90,7 +90,7 @@ test('falla del ledger no rompe la invocación (resiliencia)', async () => {
 
 test('No-Astra: prompt/system se neutralizan antes del proveedor y la salida también', async () => {
     const gem = fakeAdapter('gemini', async () => ({ text: `reiniciá ${FORBIDDEN}`, inputTokens: 0, outputTokens: 0, cachedTokens: 0 }));
-    const router = new ProviderRouter({ store: new MemoryRoosterStore(), adapters: { gemini: gem } });
+    const router = new ProviderRouter({ store: new MemoryRosterStore(), adapters: { gemini: gem } });
     const res = await router.complete('gemini', { ...REQ, prompt: `log de ${FORBIDDEN}server`, system: `sos ${FORBIDDEN}` });
     const re = new RegExp(FORBIDDEN, 'i');
     assert.doesNotMatch(gem.seen[0]!.prompt, re);
@@ -99,7 +99,7 @@ test('No-Astra: prompt/system se neutralizan antes del proveedor y la salida tam
 });
 
 test('getQuotaSummary: acumula últimas 5h y 24h por proveedor (requests, tokens, rate_limits)', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const now = new Date('2026-11-24T12:00:00Z');
     const h = 3600_000;
     const base = { agent_name: 'jarvis', model: 'm', task_type: 'route', cached_tokens: 0, latency_ms: 1, error_code: null, metadata: {} } as const;

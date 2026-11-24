@@ -1,13 +1,13 @@
-# xRooster — contenedor aislado (RFC-2026-003 §4.1, Camino A).
+# xRoster — contenedor aislado (RFC-2026-003 §4.1, Camino A).
 # Portable a VM dedicada: solo cambian los valores de .env.
 services:
-  xrooster:
+  xroster:
     build:
       context: .
       args:
         INSTALL_CLAUDE_CLI: "true"
-    image: xrooster:latest
-    container_name: xrooster
+    image: xroster:latest
+    container_name: xroster
     restart: unless-stopped
     env_file: .env
     environment:
@@ -17,7 +17,7 @@ services:
     mem_limit: "1536m"
     ports:
       # Solo xBackend debe alcanzar el webhook; protegido además por X-Internal-Secret.
-      - "${XROOSTER_BIND_ADDR:-127.0.0.1}:${PORT:-3900}:${PORT:-3900}"
+      - "${XROSTER_BIND_ADDR:-127.0.0.1}:${PORT:-3900}:${PORT:-3900}"
     volumes:
       - xplanning-data:/data/xPlanning
       - claude-home:/home/node/.claude

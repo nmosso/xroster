@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import { ApprovalManager } from '../src/core/approvals';
 import { ProviderRouter } from '../src/providers/providerRouter';
 import { MAX_TOOL_OUTPUT_CHARS } from '../src/core/text';
@@ -52,7 +52,7 @@ function monitoring(nowSec: number): MonitoringSource {
 }
 
 function setup(opts: { runner?: ReturnType<typeof scriptedRunner>; withLlm?: boolean; irdOk?: boolean } = {}) {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const { clock, nowMs } = fixedClock();
     const runner = opts.runner ?? scriptedRunner(() => ({ code: 0, stdout: HEALTHY_OUT }));
     const ssh = new SshTool({ runner, user: 'root', keyPath: '/run/secrets/ssh_key' });

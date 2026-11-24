@@ -1,4 +1,4 @@
-# MEMORY — `xRooster` (Fase 1)
+# MEMORY — `xRoster` (Fase 1)
 
 | Metadato | Detalle |
 | :--- | :--- |
@@ -27,8 +27,8 @@ src/
     health.ts         evaluación determinista del hash Redis (heartbeat 90 s, canales, IRD)
     text.ts           truncate(4000) + neutralize() (regla No-Astra) · logger.ts JSON-lines
   db/
-    store.ts          interfaz RoosterStore + tipos de las 5 tablas
-    pgStore.ts        pg.Pool → PG_XROOSTER_URL; initSchema() aplica sql/001
+    store.ts          interfaz RosterStore + tipos de las 5 tablas
+    pgStore.ts        pg.Pool → PG_XROSTER_URL; initSchema() aplica sql/001
     memoryStore.ts    implementación in-memory fiel (tests)
     tenantsRepo.ts    SELECT read-only parametrizado sobre public.tenants (pool con default_transaction_read_only)
   providers/
@@ -41,7 +41,7 @@ src/
     monitoringSource.ts SCAN monitoring:tenant:* + HGETALL
     planningRepo.ts   clone/pull --ff-only, lectura segura, publishDraft (solo draft/shikamaru-*)
   agents/ sentinel.ts · tank.ts · shikamaru.ts
-sql/001_init_xroosterdb.sql   DDL idempotente (5 tablas, pgcrypto, JSONB, índices §5.1)
+sql/001_init_xrosterdb.sql   DDL idempotente (5 tablas, pgcrypto, JSONB, índices §5.1)
 test/*.test.ts (npm test) · test/sql/*.test.ts (npm run test:sql, requiere TEST_PG_URL)
 scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shell)
 ```
@@ -87,7 +87,7 @@ scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shel
 ## 6. Compromiso de completitud
 - [ ] Ejecutar `npm run test:sql` contra PostgreSQL efímero y `docker build` (DoD §6.2).
 - [ ] T-01 en `xBackend` (exclusión + forward firmado 3 s) — fuera de este repo.
-- [ ] Crear rol `xrooster_user` / BD `xroosterdb` y rol read-only para `PG_XSERVER_RO_URL`.
+- [ ] Crear rol `xroster_user` / BD `xrosterdb` y rol read-only para `PG_XSERVER_RO_URL`.
 - [ ] Validar nombres reales de unidades systemd (xmanager/multicast/streamer) en una cabecera.
 - [ ] Actualizar `Planning-X/Memory/INDEX.md` con este servicio.
 - Regla: este archivo ≤150 líneas; consolidar en vez de acumular.

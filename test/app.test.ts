@@ -6,17 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app';
 import { loadConfig } from '../src/config';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import { FLAG_PAUSED } from '../src/db/store';
 import { scriptedRunner, VALID_ENV } from './helpers';
 
 const GROUP = VALID_ENV['WHATSAPP_COMMAND_GROUP_ID']!;
-const SECRET = VALID_ENV['XROOSTER_WEBHOOK_SECRET']!;
+const SECRET = VALID_ENV['XROSTER_WEBHOOK_SECRET']!;
 
 function harness() {
-    const dir = mkdtempSync(join(tmpdir(), 'xrooster-app-'));
+    const dir = mkdtempSync(join(tmpdir(), 'xroster-app-'));
     const cfg = loadConfig({ ...VALID_ENV, PORT: '0', XPLANNING_LOCAL_DIR: join(dir, 'xPlanning'), SENTINEL_POLL_MS: '3600000' });
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     let initCalls = 0;
     store.initSchema = async () => { initCalls++; };
     const evolution: { url: string; body: { number: string; text: string } }[] = [];

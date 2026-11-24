@@ -1,4 +1,4 @@
-// Contratos de persistencia de xroosterdb (REQ-2026-012 §5.1). Implementaciones: PgRoosterStore y MemoryRoosterStore.
+// Contratos de persistencia de xrosterdb (REQ-2026-012 §5.1). Implementaciones: PgRosterStore y MemoryRosterStore.
 
 export type AgentName = 'jarvis' | 'sentinel' | 'tank' | 'shikamaru';
 export type ProviderName = 'gemini' | 'claude';
@@ -98,7 +98,7 @@ export interface AuditEntry extends AuditClaim {
     metadata: JsonObject;
 }
 
-export interface RoosterStore {
+export interface RosterStore {
     initSchema(): Promise<void>;
     close(): Promise<void>;
 

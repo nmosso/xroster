@@ -1,4 +1,4 @@
-/** Contrato de forward xBackend -> xRooster (REQ-2026-012 §5.2). */
+/** Contrato de forward xBackend -> xRoster (REQ-2026-012 §5.2). */
 export interface WebhookPayload {
     message_id: string;
     group_id: string;

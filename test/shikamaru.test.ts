@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import { ApprovalManager } from '../src/core/approvals';
 import { ProviderRouter } from '../src/providers/providerRouter';
 import {
@@ -25,7 +25,7 @@ function fakeCheckout(): string {
     writeFileSync(join(dir, 'Memory', 'INDEX.md'), '# Índice de Memoria\n- Heartbeat_And_Monitoring_Architecture');
     writeFileSync(join(dir, 'Memory', 'xBackend', 'Tenants', 'server43', 'MEMORY.md'), '# server43\nModulador Atomic, IRD 4 tuners');
     writeFileSync(join(dir, 'Cross_System', '01_Borradores', 'REQ-2026-013_AXELROD.md'), '# REQ-2026-013 Axelrod borrador');
-    writeFileSync(join(dir, 'Cross_System', '02_Aprobados', 'REQ-2026-012_XROOSTER_FASE1.md'), '# REQ-2026-012\nFase 1 de xRooster: Jarvis, Sentinel, Tank, Shikamaru');
+    writeFileSync(join(dir, 'Cross_System', '02_Aprobados', 'REQ-2026-012_XROSTER_FASE1.md'), '# REQ-2026-012\nFase 1 de xRoster: Jarvis, Sentinel, Tank, Shikamaru');
     return dir;
 }
 
@@ -43,7 +43,7 @@ function setup(opts: { failPull?: boolean; failPush?: boolean; token?: string; d
     const repo = new PlanningRepo({
         runner, localDir: dir, repoUrl: 'https://github.com/nmosso/xPlanning.git', branch: 'main', ...(opts.token ? { token: opts.token } : {})
     });
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const { clock } = fixedClock();
     const approvals = new ApprovalManager({ store, clock });
     const claude = fakeAdapter('claude', (req) =>
@@ -146,7 +146,7 @@ test('consulta L0: lee INDEX, MEMORY del tenant, borradores y aprobados, y respo
     assert.match(prompt, /Índice de Memoria/);
     assert.match(prompt, /Modulador Atomic/);
     assert.match(prompt, /REQ-2026-013_AXELROD\.md/);
-    assert.match(prompt, /Fase 1 de xRooster/);
+    assert.match(prompt, /Fase 1 de xRoster/);
     assert.equal(t.store.ledger[0]!.provider, 'claude');
     assert.equal(t.store.ledger[0]!.agent_name, 'shikamaru');
     assert.equal(t.store.ledger[0]!.task_type, 'planning');

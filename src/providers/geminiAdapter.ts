@@ -2,7 +2,7 @@ import type { LlmCompletion, LlmRequest, ProviderAdapter } from './providerRoute
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
-/** Superficie mínima del SDK oficial `@google/genai` usada por xRooster (inyectable en tests). */
+/** Superficie mínima del SDK oficial `@google/genai` usada por xRoster (inyectable en tests). */
 export interface GeminiClientLike {
     models: {
         generateContent(params: {

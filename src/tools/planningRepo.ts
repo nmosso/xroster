@@ -167,8 +167,8 @@ export class PlanningRepo {
             await writeFile(abs, d.content, 'utf8');
             await this.gitOrThrow(['add', '--', rel]);
             await this.gitOrThrow([
-                '-c', `user.name=${this.o.authorName ?? 'Shikamaru (xRooster)'}`,
-                '-c', `user.email=${this.o.authorEmail ?? 'shikamaru@xrooster.local'}`,
+                '-c', `user.name=${this.o.authorName ?? 'Shikamaru (xRoster)'}`,
+                '-c', `user.email=${this.o.authorEmail ?? 'shikamaru@xroster.local'}`,
                 'commit', '-m', d.commitMessage
             ]);
             const commit = (await this.git(['rev-parse', '--short', 'HEAD'])).stdout.trim();

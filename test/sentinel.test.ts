@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import { FLAG_PAUSED, FLAG_SILENCED_ALL_UNTIL } from '../src/db/store';
 import { Sentinel } from '../src/agents/sentinel';
 import type { MonitoringSource, TenantSnapshot } from '../src/tools/monitoringSource';
@@ -37,7 +37,7 @@ function controllableSource(nowSec: () => number) {
 }
 
 function setup() {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const c = fixedClock();
     const src = controllableSource(() => Math.floor(c.nowMs() / 1000));
     const sent: string[] = [];
@@ -184,7 +184,7 @@ test('L3: Redis caído -> tick no lanza, registra error y el loop sigue', async 
 });
 
 test('fallo al notificar: no marca last_notified_at para reintentar en el próximo tick', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const c = fixedClock();
     const src = controllableSource(() => Math.floor(c.nowMs() / 1000));
     let fail = true;

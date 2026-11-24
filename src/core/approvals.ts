@@ -1,4 +1,4 @@
-import type { ActionType, Approval, JsonObject, RoosterStore } from '../db/store';
+import type { ActionType, Approval, JsonObject, RosterStore } from '../db/store';
 import { errorMessage } from './logger';
 
 /** RF-06: TTL de toda acción L1. */
@@ -17,7 +17,7 @@ export interface ApprovalRequest {
 }
 
 export interface ApprovalManagerOptions {
-    store: RoosterStore;
+    store: RosterStore;
     clock?: () => Date;
     random?: () => number;
     ttlMs?: number;

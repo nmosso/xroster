@@ -1,5 +1,5 @@
--- xroosterdb — esquema inicial (REQ-2026-012 §5.1). Idempotente: se puede aplicar N veces.
--- Base dedicada y aislada (rol xrooster_user). Cero tablas en xServerSQL.
+-- xrosterdb — esquema inicial (REQ-2026-012 §5.1). Idempotente: se puede aplicar N veces.
+-- Base dedicada y aislada (rol xroster_user). Cero tablas en xServerSQL.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

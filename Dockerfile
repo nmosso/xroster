@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# xRooster — imagen multi-stage (REQ-2026-012 T-02)
+# xRoster — imagen multi-stage (REQ-2026-012 T-02)
 
 # ---------- Etapa 1: build ----------
 FROM node:22-bookworm-slim AS build

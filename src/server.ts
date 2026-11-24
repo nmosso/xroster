@@ -35,7 +35,7 @@ export function createServer(opts: ServerOptions): http.Server {
         const path = (req.url ?? '/').split('?')[0];
 
         if (req.method === 'GET' && path === '/health') {
-            send(res, 200, { status: 'ok', service: 'xrooster' });
+            send(res, 200, { status: 'ok', service: 'xroster' });
             return;
         }
         if (req.method !== 'POST' || path !== WEBHOOK_PATH) {

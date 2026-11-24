@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import { ApprovalManager, APPROVAL_TTL_MS } from '../src/core/approvals';
 
 function setup(start = Date.parse('2026-11-24T12:00:00Z')) {
     let now = start;
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const executed: string[] = [];
     const mgr = new ApprovalManager({ store, clock: () => new Date(now) });
     mgr.register('restart_service', async (a) => {
@@ -99,7 +99,7 @@ test('código en minúsculas se normaliza', async () => {
 });
 
 test('handler que falla -> status failed con detalle', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const mgr = new ApprovalManager({ store });
     mgr.register('restart_service', async () => { throw new Error('ssh timeout'); });
     const a = await mgr.request(REQ);
@@ -110,7 +110,7 @@ test('handler que falla -> status failed con detalle', async () => {
 });
 
 test('colisión de código: reintenta con otro aleatorio', async () => {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const seq = [0.5, 0.5, 0.1];
     const mgr = new ApprovalManager({ store, random: () => seq.shift() ?? 0.9 });
     mgr.register('restart_service', async () => 'ok');

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryRoosterStore } from '../src/db/memoryStore';
+import { MemoryRosterStore } from '../src/db/memoryStore';
 import { FLAG_PAUSED } from '../src/db/store';
 import { ApprovalManager } from '../src/core/approvals';
 import { Jarvis, parseCommand, detectMention, type SpecialistAgent, type SentinelControl, type SpecialistName } from '../src/core/jarvis';
@@ -20,7 +20,7 @@ function agent(name: SpecialistName, impl?: (text: string) => Promise<string>): 
 }
 
 function setup(opts: { classify?: string } = {}) {
-    const store = new MemoryRoosterStore();
+    const store = new MemoryRosterStore();
     const messenger = fakeMessenger();
     const { clock, advance } = fixedClock();
     const approvals = new ApprovalManager({ store, clock });

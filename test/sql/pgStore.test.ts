@@ -1,15 +1,15 @@
-// npm run test:sql — aplica 001_init_xroosterdb.sql en una BD PostgreSQL EFÍMERA y corre el contrato de RoosterStore.
+// npm run test:sql — aplica 001_init_xrosterdb.sql en una BD PostgreSQL EFÍMERA y corre el contrato de RosterStore.
 // Requiere TEST_PG_URL con permisos de CREATE DATABASE (ej. postgres://postgres:postgres@localhost:5432/postgres).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Client, Pool } from 'pg';
-import { PgRoosterStore, INIT_SQL_PATH } from '../../src/db/pgStore';
+import { PgRosterStore, INIT_SQL_PATH } from '../../src/db/pgStore';
 import { runStoreContract, approvalFixture } from '../storeContract';
 
 const ADMIN_URL = process.env['TEST_PG_URL'];
-const DB_NAME = `xrooster_test_${randomBytes(4).toString('hex')}`;
+const DB_NAME = `xroster_test_${randomBytes(4).toString('hex')}`;
 
 function dbUrl(name: string): string {
     const u = new URL(ADMIN_URL!);
@@ -37,10 +37,10 @@ if (!ADMIN_URL) {
         await admin.end();
     });
 
-    async function freshStore(): Promise<PgRoosterStore> {
+    async function freshStore(): Promise<PgRosterStore> {
         const pool = new Pool({ connectionString: dbUrl(DB_NAME), max: 2 });
         pools.push(pool);
-        const store = new PgRoosterStore(pool);
+        const store = new PgRosterStore(pool);
         await store.initSchema();
         await pool.query('TRUNCATE quota_usage_ledger, action_approvals, sentinel_alert_state, agent_audit_log, system_flags');
         // close() del contrato no debe cerrar el pool compartido del test.

@@ -1,6 +1,6 @@
 import type {
     AlertStateRow, Approval, ApprovalPatch, ApprovalStatus, AuditClaim, AuditCompletion, AuditEntry, NewApproval,
-    ProviderUsage, QuotaUsageEntry, RoosterStore
+    ProviderUsage, QuotaUsageEntry, RosterStore
 } from './store';
 
 /** Copia profunda para evitar aliasing con el estado interno (fiel a la semántica de una BD real). */
@@ -8,8 +8,8 @@ function clone<T>(value: T): T {
     return structuredClone(value);
 }
 
-/** Implementación in-memory fiel al contrato de PgRoosterStore, para tests unitarios rápidos. */
-export class MemoryRoosterStore implements RoosterStore {
+/** Implementación in-memory fiel al contrato de PgRosterStore, para tests unitarios rápidos. */
+export class MemoryRosterStore implements RosterStore {
     readonly ledger: Required<QuotaUsageEntry>[] = [];
     private readonly approvals = new Map<string, Approval>();
     private readonly alerts = new Map<string, AlertStateRow>();

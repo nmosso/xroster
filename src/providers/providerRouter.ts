@@ -1,4 +1,4 @@
-import type { AgentName, JsonObject, ProviderName, ProviderUsage, QuotaUsageEntry, RoosterStore, TaskType } from '../db/store';
+import type { AgentName, JsonObject, ProviderName, ProviderUsage, QuotaUsageEntry, RosterStore, TaskType } from '../db/store';
 import { neutralize } from '../core/text';
 import { errorMessage, silentLogger, type Logger } from '../core/logger';
 
@@ -58,7 +58,7 @@ export interface QuotaSummary {
 const HOUR_MS = 3600_000;
 
 export interface ProviderRouterOptions {
-    store: RoosterStore;
+    store: RosterStore;
     adapters: Partial<Record<ProviderName, ProviderAdapter>>;
     clock?: () => Date;
     logger?: Logger;

@@ -3,17 +3,17 @@ import { join } from 'node:path';
 import { Pool, type PoolConfig } from 'pg';
 import type {
     AlertStateRow, Approval, ApprovalPatch, ApprovalStatus, AuditClaim, AuditCompletion, AuditEntry, JsonObject, NewApproval,
-    ProviderUsage, QuotaUsageEntry, RoosterStore
+    ProviderUsage, QuotaUsageEntry, RosterStore
 } from './store';
 
 /** Ruta al DDL idempotente; válida tanto desde src/db (tsx) como desde dist/db (build). */
-export const INIT_SQL_PATH = join(__dirname, '..', '..', 'sql', '001_init_xroosterdb.sql');
+export const INIT_SQL_PATH = join(__dirname, '..', '..', 'sql', '001_init_xrosterdb.sql');
 
 const APPROVAL_COLS = 'code, agent_name, action_type, target_tenant, summary_text, payload, status, requested_at, expires_at, decided_at, result_summary';
 const ALERT_COLS = 'alert_key, tenant_position, tenant_name, component, state, first_seen_at, last_notified_at, silenced_until, last_detail, metrics';
 
-/** Implementación PostgreSQL (`pg.Pool`) sobre xroosterdb (PG_XROOSTER_URL). */
-export class PgRoosterStore implements RoosterStore {
+/** Implementación PostgreSQL (`pg.Pool`) sobre xrosterdb (PG_XROSTER_URL). */
+export class PgRosterStore implements RosterStore {
     readonly pool: Pool;
 
     constructor(connectionStringOrPool: string | Pool, extra: PoolConfig = {}) {
