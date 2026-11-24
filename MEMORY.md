@@ -10,12 +10,12 @@
 ## 1. Qué es
 Microservicio Docker (1.0 vCPU / 1536 MB) que conecta el grupo War Room de WhatsApp con 4 agentes:
 **Jarvis** (orquestador), **Sentinel** (QoS), **Tank** (infra) y **Shikamaru** (planificación SDD).
-Todo por `.env` → portable a VM dedicada sin cambios de código.
+Todo por `../.env.roster` (fuera del repo, `git pull` no lo pisa) → portable a VM dedicada sin cambios de código.
 
 ## 2. Mapa del código
 ```
 src/
-  index.ts            entrada: dotenv → loadConfig → createApp → start; SIGINT/SIGTERM graceful (10 s)
+  index.ts            entrada: dotenv (XROSTER_ENV_FILE | ../.env.roster, sin override) → loadConfig → createApp → start; SIGINT/SIGTERM graceful (10 s)
   app.ts              ensamblado DI (createApp(cfg, deps)); deps inyectables para tests L2
   config.ts           AppConfig tipado + ConfigError (lista todos los problemas)
   server.ts           node:http: GET /health · POST /internal/whatsapp/webhook (401/400/413/200)
@@ -73,7 +73,11 @@ scripts/run-tests.mjs         runner portable (Linux/Windows, sin globs del shel
   test que escanea `src/` y `sql/` exige cero menciones.
 
 ## 4. Operación
-- `npm run build && npm start` · `npm run dev` (tsx watch) · `docker compose up -d --build`.
+- Entorno: `cp .env.example ../.env.roster` (hermano del repo, fuera de git). `docker-compose.yml` usa
+  `env_file: ../.env.roster`; `src/index.ts` lo resuelve desde `cwd` (override `XROSTER_ENV_FILE`) sin pisar
+  variables ya presentes en el entorno. Para interpolar `${PORT}`/`${XROSTER_BIND_ADDR}` en compose:
+  `docker compose --env-file ../.env.roster up -d --build`.
+- `npm run build && npm start` · `npm run dev` (tsx watch).
 - La clave SSH se monta en `/run/secrets/ssh_key` (ro). Volúmenes: `/data/xPlanning`, `~/.claude` (login CLI).
 - `CLAUDE_PROVIDER=cli` requiere `claude` autenticado dentro del contenedor (volumen `claude-home`).
 - Redis/IRD/SSH vía red Tailscale `100.64.N.*`: el host Docker debe enrutar hacia esa red.

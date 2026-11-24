@@ -1,5 +1,8 @@
 # xRoster — contenedor aislado (RFC-2026-003 §4.1, Camino A).
-# Portable a VM dedicada: solo cambian los valores de .env.
+# Portable a VM dedicada: solo cambian los valores de ../.env.roster
+# (fuera del repo para que `git pull` nunca lo sobrescriba; copiar desde .env.example).
+# Nota: la interpolación ${PORT}/${XROSTER_BIND_ADDR}/${SSH_KEY_HOST_PATH} de este archivo NO lee
+# env_file; para usar esos valores: `docker compose --env-file ../.env.roster up -d --build`.
 services:
   xroster:
     build:
@@ -9,7 +12,7 @@ services:
     image: xroster:latest
     container_name: xroster
     restart: unless-stopped
-    env_file: .env
+    env_file: ../.env.roster
     environment:
       NODE_ENV: production
     # Límites duros de recursos (1.0 vCPU / 1.5 GB RAM)

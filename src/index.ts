@@ -1,4 +1,11 @@
-import 'dotenv/config';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+// El archivo de entorno vive fuera del repo (../.env.roster) para que `git pull` no lo sobrescriba.
+// dotenv no pisa variables ya presentes en process.env (las inyectadas por Docker/entorno ganan).
+// Si el archivo no existe (p. ej. dentro del contenedor), se continúa con process.env tal cual.
+dotenv.config({ path: process.env.XROSTER_ENV_FILE || path.resolve(process.cwd(), '../.env.roster') });
+
 import { createApp } from './app';
 import { ConfigError, loadConfig } from './config';
 import { consoleLogger, errorMessage } from './core/logger';
